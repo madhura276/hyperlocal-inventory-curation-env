@@ -1,0 +1,7 @@
+spec_version: 1
+name: hyperlocal_inventory_curation_env
+type: space
+runtime: fastapi
+app: server.app:app
+port: 8000
+
