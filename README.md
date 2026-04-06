@@ -1,6 +1,6 @@
 ---
 title: Hyperlocal Inventory Curation
-emoji: "shopping_cart"
+emoji: "🛒"
 colorFrom: blue
 colorTo: green
 sdk: docker
@@ -170,6 +170,8 @@ Examples:
 - `Coke Zero can 300ml`
 - `Coca Cola Zero 330 ml can`
 
+This task is intentionally safety-oriented: the best agent is not the one that guesses the most, but the one that knows when to escalate ambiguity.
+
 ## Grading
 
 Each task has a deterministic grader that returns a score in `[0.0, 1.0]`.
@@ -232,6 +234,7 @@ Current status:
 - environment validation passes
 - Docker build works
 - API endpoints work locally
+- Hugging Face Space is deployed and responding
 
 ## OpenEnv Validation
 
@@ -269,9 +272,15 @@ docker run -p 8000:8000 hyperlocal-inventory-curation
 
 ## Hugging Face Space Deployment
 
-This project is ready for deployment as a Docker Space.
+This project is deployed as a Docker Space.
 
-Typical flow:
+Space page:
+- [https://huggingface.co/spaces/MadhuraMadhu/hyperlocal-inventory-curation-env](https://huggingface.co/spaces/MadhuraMadhu/hyperlocal-inventory-curation-env)
+
+Live app endpoint:
+- [https://madhuramadhu-hyperlocal-inventory-curation-env.hf.space](https://madhuramadhu-hyperlocal-inventory-curation-env.hf.space)
+
+Typical deployment flow:
 1. Create a new Hugging Face Space.
 2. Choose `Docker` as the SDK.
 3. Push this repository to the Space.
@@ -288,7 +297,7 @@ openenv push
 
 ## Example API Usage
 
-Reset the environment:
+Local reset example:
 
 ```powershell
 Invoke-WebRequest -UseBasicParsing `
@@ -298,7 +307,7 @@ Invoke-WebRequest -UseBasicParsing `
   -Body "{}" | Select-Object -ExpandProperty Content
 ```
 
-Take one step:
+Local step example:
 
 ```powershell
 Invoke-WebRequest -UseBasicParsing `
@@ -306,6 +315,14 @@ Invoke-WebRequest -UseBasicParsing `
   -Method POST `
   -ContentType "application/json" `
   -Body '{"action":{"action_type":"normalize_title","record_id":"easy_1","field_name":"normalized_title","value":"Coca Cola 1 L"}}' |
+Select-Object -ExpandProperty Content
+```
+
+Deployed health check example:
+
+```powershell
+Invoke-WebRequest -UseBasicParsing `
+  -Uri "https://madhuramadhu-hyperlocal-inventory-curation-env.hf.space/health" |
 Select-Object -ExpandProperty Content
 ```
 
@@ -344,6 +361,7 @@ This environment currently satisfies the core hackathon requirements:
 - Docker build
 - OpenEnv validation
 - local API verification
+- Hugging Face Space deployment
 
 ## Summary
 
