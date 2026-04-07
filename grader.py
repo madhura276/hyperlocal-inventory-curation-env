@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Iterable, List, Optional, Tuple
+from typing import Dict, Iterable, List, Optional
 
 from models import (
-    Category,
     ExpectedRecordOutcome,
     InventoryCurationReward,
     InventoryCurationState,
@@ -12,9 +11,7 @@ from models import (
     RecordStatus,
     RewardComponent,
     TaskDefinition,
-    Unit,
 )
-
 
 TITLE_WEIGHT = 0.20
 SIZE_WEIGHT = 0.20
@@ -22,6 +19,8 @@ CATEGORY_WEIGHT = 0.20
 DUPLICATE_WEIGHT = 0.15
 PRICE_WEIGHT = 0.15
 ESCALATION_WEIGHT = 0.10
+
+SCORE_EPS = 1e-3
 
 
 @dataclass(frozen=True)
@@ -31,10 +30,14 @@ class GradeBreakdown:
     components: List[RewardComponent]
 
 
-SCORE_EPS = 1e-3
-
 def _clip_score(value: float) -> float:
     return max(SCORE_EPS, min(1.0 - SCORE_EPS, value))
+
+
+def _strict_ratio(hits: int, total: int) -> float:
+    if total <= 0:
+        return 1.0 - SCORE_EPS
+    return _clip_score(hits / total)
 
 
 def _normalize_text(value: Optional[str]) -> str:
@@ -67,7 +70,7 @@ def score_title_normalization(task: TaskDefinition, records: List[InventoryRecor
         if outcome.normalized_title is not None
     ]
     if not expected_ids:
-        return 1.0
+        return 1.0 - SCORE_EPS
 
     hits = 0
     for record_id in expected_ids:
@@ -76,7 +79,7 @@ def score_title_normalization(task: TaskDefinition, records: List[InventoryRecor
         if actual and _normalize_text(actual.normalized_title) == _normalize_text(expected.normalized_title):
             hits += 1
 
-    return hits / len(expected_ids)
+    return _strict_ratio(hits, len(expected_ids))
 
 
 def score_unit_normalization(task: TaskDefinition, records: List[InventoryRecord]) -> float:
@@ -89,7 +92,7 @@ def score_unit_normalization(task: TaskDefinition, records: List[InventoryRecord
         if outcome.quantity_value is not None or outcome.quantity_unit is not None or outcome.pack_count is not None
     ]
     if not expected_ids:
-        return 1.0
+        return 1.0 - SCORE_EPS
 
     hits = 0
     for record_id in expected_ids:
@@ -114,7 +117,7 @@ def score_unit_normalization(task: TaskDefinition, records: List[InventoryRecord
         if quantity_ok and unit_ok and pack_ok:
             hits += 1
 
-    return hits / len(expected_ids)
+    return _strict_ratio(hits, len(expected_ids))
 
 
 def score_category_assignment(task: TaskDefinition, records: List[InventoryRecord]) -> float:
@@ -127,7 +130,7 @@ def score_category_assignment(task: TaskDefinition, records: List[InventoryRecor
         if outcome.category is not None
     ]
     if not expected_ids:
-        return 1.0
+        return 1.0 - SCORE_EPS
 
     hits = 0
     for record_id in expected_ids:
@@ -136,7 +139,7 @@ def score_category_assignment(task: TaskDefinition, records: List[InventoryRecor
         if actual and actual.category == expected.category:
             hits += 1
 
-    return hits / len(expected_ids)
+    return _strict_ratio(hits, len(expected_ids))
 
 
 def score_duplicate_resolution(task: TaskDefinition, state: InventoryCurationState) -> float:
@@ -152,7 +155,7 @@ def score_duplicate_resolution(task: TaskDefinition, state: InventoryCurationSta
     }
 
     if not expected_pairs:
-        return 1.0 if not actual_pairs else 0.0
+        return 1.0 - SCORE_EPS if not actual_pairs else SCORE_EPS
 
     correct_pairs = expected_pairs & actual_pairs
     extra_pairs = actual_pairs - expected_pairs
@@ -172,7 +175,7 @@ def score_price_handling(task: TaskDefinition, records: List[InventoryRecord]) -
         if outcome.price is not None
     ]
     if not expected_ids:
-        return 1.0
+        return 1.0 - SCORE_EPS
 
     hits = 0
     for record_id in expected_ids:
@@ -181,7 +184,7 @@ def score_price_handling(task: TaskDefinition, records: List[InventoryRecord]) -
         if actual and _float_equal(actual.price, expected.price):
             hits += 1
 
-    return hits / len(expected_ids)
+    return _strict_ratio(hits, len(expected_ids))
 
 
 def score_escalation_quality(task: TaskDefinition, state: InventoryCurationState) -> float:
@@ -198,7 +201,7 @@ def score_escalation_quality(task: TaskDefinition, state: InventoryCurationState
             actual_flagged.add(record_id)
 
     if not expected_flagged:
-        return 1.0 if not actual_flagged else 0.0
+        return 1.0 - SCORE_EPS if not actual_flagged else SCORE_EPS
 
     correct_flags = expected_flagged & actual_flagged
     extra_flags = actual_flagged - expected_flagged
@@ -218,7 +221,7 @@ def score_status_alignment(task: TaskDefinition, records: List[InventoryRecord])
         if outcome.status is not None
     ]
     if not expected_ids:
-        return 1.0
+        return 1.0 - SCORE_EPS
 
     hits = 0
     for record_id in expected_ids:
@@ -227,17 +230,17 @@ def score_status_alignment(task: TaskDefinition, records: List[InventoryRecord])
         if actual and actual.status == expected.status:
             hits += 1
 
-    return hits / len(expected_ids)
+    return _strict_ratio(hits, len(expected_ids))
 
 
 def grade_state(task: TaskDefinition, state: InventoryCurationState) -> GradeBreakdown:
-    title_score = score_title_normalization(task, state.records)
-    size_score = score_unit_normalization(task, state.records)
-    category_score = score_category_assignment(task, state.records)
-    duplicate_score = score_duplicate_resolution(task, state)
-    price_score = score_price_handling(task, state.records)
-    escalation_score = score_escalation_quality(task, state)
-    status_score = score_status_alignment(task, state.records)
+    title_score = _clip_score(score_title_normalization(task, state.records))
+    size_score = _clip_score(score_unit_normalization(task, state.records))
+    category_score = _clip_score(score_category_assignment(task, state.records))
+    duplicate_score = _clip_score(score_duplicate_resolution(task, state))
+    price_score = _clip_score(score_price_handling(task, state.records))
+    escalation_score = _clip_score(score_escalation_quality(task, state))
+    status_score = _clip_score(score_status_alignment(task, state.records))
 
     components = [
         RewardComponent(
@@ -299,7 +302,7 @@ def build_reward(
     current_grade = grade_state(task, current_state)
 
     delta = current_grade.progress_score - previous_grade.progress_score - penalty
-    if submitted and current_grade.total_score >= 0.85:
+    if submitted and current_grade.total_score > 0.85:
         delta += 0.05
 
     explanation_parts = [
