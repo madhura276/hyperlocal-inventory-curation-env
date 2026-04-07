@@ -31,8 +31,10 @@ class GradeBreakdown:
     components: List[RewardComponent]
 
 
+SCORE_EPS = 1e-3
+
 def _clip_score(value: float) -> float:
-    return max(0.0, min(1.0, value))
+    return max(SCORE_EPS, min(1.0 - SCORE_EPS, value))
 
 
 def _normalize_text(value: Optional[str]) -> str:
