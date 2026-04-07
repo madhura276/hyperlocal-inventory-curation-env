@@ -11,7 +11,6 @@ from server.environment import HyperlocalInventoryCurationEnvironment
 from tasks import TASKS
 
 
-
 def test_reset_loads_requested_task() -> None:
     env = HyperlocalInventoryCurationEnvironment(task_id="medium_duplicate_price_fix")
     observation = env.reset()
@@ -51,14 +50,14 @@ def test_reset_clears_state() -> None:
     assert record.category is None
 
 
-def test_grader_score_is_bounded() -> None:
+def test_grader_score_is_strictly_between_zero_and_one() -> None:
     env = HyperlocalInventoryCurationEnvironment(task_id="easy_title_unit_cleanup")
     env.reset()
 
     breakdown = grade_state(TASKS["easy_title_unit_cleanup"], env.state)
 
-    assert 0.0 <= breakdown.total_score <= 1.0
-    assert 0.0 <= breakdown.progress_score <= 1.0
+    assert 0.0 < breakdown.total_score < 1.0
+    assert 0.0 < breakdown.progress_score < 1.0
 
 
 def test_invalid_category_action_gets_penalized() -> None:
@@ -194,7 +193,7 @@ def test_easy_task_reaches_high_score_with_known_good_sequence() -> None:
         observation = env.step(action)
 
     assert observation is not None
-    assert env.state.score >= 0.85
+    assert 0.85 < env.state.score < 1.0
 
 
 def test_repeated_identical_action_gets_repeat_penalty() -> None:
@@ -219,3 +218,4 @@ def test_repeated_identical_action_gets_repeat_penalty() -> None:
     )
 
     assert float(second.reward or 0.0) <= float(first.reward or 0.0)
+
