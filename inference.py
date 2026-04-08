@@ -11,7 +11,8 @@ from tasks import TASK_ORDER, TASKS
 
 
 LOCAL_IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME")
-API_KEY = os.getenv("HF_TOKEN") or os.getenv("API_KEY")
+HF_TOKEN = os.getenv("HF_TOKEN")
+API_KEY = HF_TOKEN or os.getenv("API_KEY")
 API_BASE_URL = os.getenv("API_BASE_URL") or "https://router.huggingface.co/v1"
 MODEL_NAME = os.getenv("MODEL_NAME") or "Qwen/Qwen2.5-72B-Instruct"
 BENCHMARK = os.getenv("HYPERLOCAL_INVENTORY_BENCHMARK", "hyperlocal_inventory_curation_env")
@@ -96,7 +97,6 @@ TITLE_TARGETS = {
     "hard_12": "Eggs 12 Pcs",
 }
 
-
 CATEGORY_TARGETS = {
     "easy_1": "beverages",
     "easy_2": "dairy",
@@ -125,13 +125,11 @@ CATEGORY_TARGETS = {
     "hard_12": "dairy",
 }
 
-
 PRICE_FIXES = {
     "med_3": 320.0,
     "hard_7": 180.0,
     "hard_10": 78.0,
 }
-
 
 FLAG_TARGETS = {"hard_2", "hard_4", "hard_9"}
 MERGE_TARGETS = [("med_1", "med_2")]
@@ -150,9 +148,12 @@ def log_step(step: int, action: str, reward: float, done: bool, error: Optional[
     )
 
 
-def log_end(success: bool, steps: int, rewards: List[float]) -> None:
+def log_end(success: bool, steps: int, score: float, rewards: List[float]) -> None:
     rewards_str = ",".join(f"{r:.2f}" for r in rewards)
-    print(f"[END] success={str(success).lower()} steps={steps} rewards={rewards_str}", flush=True)
+    print(
+        f"[END] success={str(success).lower()} steps={steps} score={score:.4f} rewards={rewards_str}",
+        flush=True,
+    )
 
 
 def _record_to_prompt_dict(record) -> dict:
@@ -368,11 +369,7 @@ def heuristic_action(env: HyperlocalInventoryCurationEnvironment) -> InventoryAc
 
         for record in records:
             target_title = TITLE_TARGETS.get(record.record_id)
-            if (
-                target_title
-                and record.status.value != "merged"
-                and record.normalized_title != target_title
-            ):
+            if target_title and record.status.value != "merged" and record.normalized_title != target_title:
                 return InventoryAction(
                     action_type="normalize_title",
                     record_id=record.record_id,
@@ -384,7 +381,6 @@ def heuristic_action(env: HyperlocalInventoryCurationEnvironment) -> InventoryAc
         return InventoryAction(action_type="finalize_batch")
 
     return InventoryAction(action_type="finalize_batch")
-
 
 
 def choose_action(client: OpenAI, env: HyperlocalInventoryCurationEnvironment) -> InventoryAction:
@@ -416,6 +412,7 @@ def run_task(client: OpenAI, task_id: str) -> None:
 
     rewards: List[float] = []
     steps_taken = 0
+    final_score = 0.001
     success = False
 
     log_start(task=task_id, env=BENCHMARK, model=MODEL_NAME)
@@ -453,12 +450,16 @@ def run_task(client: OpenAI, task_id: str) -> None:
             if done:
                 break
 
-        final_score = float(env.state.score)
+        final_score = max(0.001, min(0.999, float(env.state.score)))
         success = final_score >= SUCCESS_SCORE_THRESHOLD
 
     finally:
-        log_end(success=success, steps=steps_taken, rewards=rewards)
-
+        log_end(
+            success=success,
+            steps=steps_taken,
+            score=final_score,
+            rewards=rewards,
+        )
 
 
 def main() -> None:
